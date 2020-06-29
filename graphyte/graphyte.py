@@ -47,7 +47,8 @@ try:
 except ImportError:
     print ("Couldn't import graphyte_gen.py module.")
     exit(1)
-except:
+except Exception as e:
+    print(e)
     pass
 import datetime
 
@@ -176,6 +177,9 @@ def main(args):
     fh.setFormatter(formatter)
     # add the handlers to the logger
     logger.addHandler(fh)
+    ch = logging.StreamHandler()
+    ch.setLevel(logging.DEBUG)
+    logger.addHandler(ch)
 
     # graphyte.log header
     logger.info('###########################################################' + '\r\n')
@@ -358,6 +362,14 @@ def main(args):
     except:
         pass
 
+    # merge-duplicate-vars behavior
+    try:
+        mdv = conf_parser.get("variables", "merge_duplicate_vars")
+        logger.info("         merge_duplicate_vars:  {}\r\n".format(mdv))
+    except:
+        # Hmmm TODO that's ugly
+        pass
+
 
     # Confluence Options
     confluence_enabled = False
@@ -492,9 +504,10 @@ def main(args):
             pyang_uml_no_option.append(pyang_uml_no)
             mod_name = mod_name + mod_ext # include extension if .yang
         logger.info("     Processing module {}\r\n".format(module))
+        # Hmmmm not good - we should NOT have to open a new interpreter here
         command = "\n\n------------------------------------------------------------------------------\n\n" \
-                  "python3 graphyte_gen.py -i \"{}\" -o \"{}\" -M \"{}\" -V \"{}\" -m \"{}\" -d \"{}\" -n \"{}\" -w \"{}\" {} {}"\
-            .format(mod_path, out_dir, model, version, mod_name, in_dir, nav_menu, work_dir, sheet_option_cmd, uml_no_option_cmd, changes_option_cmd,)
+                  "python3 graphyte_gen.py -i \"{}\" -o \"{}\" -M \"{}\" -V \"{}\" -m \"{}\" -d \"{}\" -n \"{}\" -w \"{}\" --merge-duplicate-vars  \"{}\" {} {}"\
+            .format(mod_path, out_dir, model, version, mod_name, in_dir, nav_menu, work_dir, mdv, sheet_option_cmd, uml_no_option_cmd, changes_option_cmd,)
         result = ""
         if test_mode:
             logger.info("     {}\r\n".format(command))
@@ -503,9 +516,10 @@ def main(args):
             result,mod_templates = build_module(
                 ['-i', mod_path, '-o', out_dir, '-M', model, '-V', version,
                  '-m', mod_name, '-d', in_dir, '-n', nav_menu, '-w',
-                 work_dir]+sheet_option+pyang_uml_no_option+changes_option
+                 work_dir, '--merge-duplicate-vars', mdv]+sheet_option+pyang_uml_no_option+changes_option
             )
-        except:
+        except Exception as e:
+            logger.warning(e)
             pass
         if result:
             model_dict[dict_p][module].update(mod_templates)

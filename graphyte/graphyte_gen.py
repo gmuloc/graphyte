@@ -137,10 +137,10 @@ class GraphyteModule(object):
         self.svg_links.append(link)
 
     def dirs_are_fine(self):
-        """Performs sanity checks on input directories. 
+        """Performs sanity checks on input directories.
 
         :return: True if pass, False if fail.
-        
+
         """
         if not (os.path.exists(self.in_diagram_path)
                 and os.path.isdir(self.file_dir)
@@ -272,9 +272,9 @@ output web page.
                         help='pyang --uml-no option.')
     parser.add_argument('-c', '--changes', required=False, dest="changes",
                         help='changes file.')
+    parser.add_argument('-z', '--merge-duplicate-vars', required=False, dest="mdv",
+                        help='[no, file, all] - merging variables across templates behavior')
     args = parser.parse_args(args)
-
-
 
     # input diagram
     if args.input == '':
@@ -330,13 +330,12 @@ output web page.
             sys.exit(usage)
         else:
             uml_no = re.sub(r'\s+', '', args.umlno)
-    else:
-        pass
     # changes file
     if args.changes:
         changes_file = re.sub(r'\s+', '', args.changes)
-    else:
-        pass
+    merge_duplicate_vars = "no"
+    if args.mdv:
+        merge_duplicate_vars = args.mdv
 
     print ("\nRunning <{graphyte}> with arguments:\n\
               -i , Diagram file:      " + in_diagram_path + "\n\
@@ -350,8 +349,8 @@ output web page.
               -w , Work Dir:          " + work_dir + "\n\
               -l , Log file:          " + log_file + "\n\
               -n , Menu items:        " + menu_items + "\n\
-              -u , pyang uml-no:      " + uml_no)
-
+              -u , pyang uml-no:      " + uml_no + "\n\
+              --merge-duplicate-vars: " + merge_duplicate_vars)
 
     # Initialize graphyte module object
     gm = GraphyteModule(
@@ -400,7 +399,7 @@ output web page.
         shutil.rmtree(os.path.join(out_dir, "work"))
 
     # process templates and detect parameters
-    file_script,module_templates = add_templates_to_script(gm)
+    file_script,module_templates = add_templates_to_script(gm, merge_duplicate_vars=merge_duplicate_vars)
 
     # add detected parameters
     file_script = add_params_to_script(gm, file_script)
@@ -426,4 +425,5 @@ output web page.
 if __name__ == "__main__":
     # run when not called via 'import'
     import sys
+    print("BLAH")
     build_module(sys.argv[1:])

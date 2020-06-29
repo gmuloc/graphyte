@@ -346,21 +346,25 @@ def build_html(gm, processed_svg, file_script, xls_to_script):
         viewer_init_content = ""
 
     logger.info('         Building HTML file...' + '\r\n')
-    filled_template = str(
-        blank_template.replace("%webTitle%", gm.title)
-            .replace("%params_csv%", gm.out_html_name_no_ext
-                     + "_parameters.csv")
-            .replace("%svg%", processed_svg)
-            .replace("%templates%", file_script)
-            .replace("%menu%", gm.menu_tags))\
-        .replace("%alert%", gm.invalid_param_found_alert)\
-        .replace("%viewer_init_content%", viewer_init_content)\
-        .replace("%xls%", xls_to_script)\
-        .replace("%menuwidth%", gm.get_menu_width())\
-        .replace("%changes_tab%", gm.changes_tab) \
-        .replace("%changes_file%", gm.changes_fname)
-    text_file = open(gm.out_html_path, "w")
-    text_file.write(filled_template)
-    text_file.close()
+    try:
+        filled_template = str(
+            blank_template.replace("%webTitle%", gm.title)
+                .replace("%params_csv%", gm.out_html_name_no_ext
+                         + "_parameters.csv")
+                .replace("%svg%", processed_svg)
+                .replace("%templates%", file_script)
+                .replace("%menu%", gm.menu_tags))\
+            .replace("%alert%", gm.invalid_param_found_alert)\
+            .replace("%viewer_init_content%", viewer_init_content)\
+            .replace("%xls%", xls_to_script)\
+            .replace("%menuwidth%", gm.get_menu_width())\
+            .replace("%changes_tab%", gm.changes_tab) \
+            .replace("%changes_file%", gm.changes_fname)
+        text_file = open(gm.out_html_path, "w")
+        text_file.write(filled_template)
+        text_file.close()
+    except Exception as e:
+        logger.debug(str(e))
+        raise e
     logger.info('         ...ok' + '\r\n')
     return
