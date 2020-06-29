@@ -182,115 +182,119 @@ def process_svg(gm):
     # TODO: use xpath
 
     logger.info('         Processing SVG file...' + '\r\n')
-    with open(gm.svg_path, 'r') as f:
-        svg_fname = os.path.basename(gm.svg_path)
-        logger.info('             ' + svg_fname + '\r\n')
-        content = f.read()
+    try:
+        with open(gm.svg_path, 'r') as f:
+            svg_fname = os.path.basename(gm.svg_path)
+            logger.info('             ' + svg_fname + '\r\n')
+            content = f.read()
 
-        # plantuml svg
-        if gm.diagram_is_uml():
-            content = re.sub(r'\s+<(?!/text)', '<', content)
-            content = re.sub(r'><', '>\n<', content)
+            # plantuml svg
+            if gm.diagram_is_uml():
+                content = re.sub(r'\s+<(?!/text)', '<', content)
+                content = re.sub(r'><', '>\n<', content)
 
-        # draw.io svg
-        is_drawio_file = False
+            # draw.io svg
+            is_drawio_file = False
 
-        if "editor=&quot;www.draw.io&quot;" in content \
-                or "host=&quot;www.draw.io&quot;" in content \
-                or "host=&quot;scdp.cisco.com&quot" in content \
-                or "host=&quot;app.diagrams.net&quot" in content \
-                or re.search(r'<[^<>]+agent=[^>]+draw.io', content):
-            is_drawio_file = True
-            content = re.sub(r'width="(.*?)px" height="(.*?)px"'
-                             , r'viewBox="0 0 \1 \2"', content)
-            content = re.sub(r'><', '>\n<', content)
+            if "editor=&quot;www.draw.io&quot;" in content \
+                    or "host=&quot;www.draw.io&quot;" in content \
+                    or "host=&quot;scdp.cisco.com&quot" in content \
+                    or "host=&quot;app.diagrams.net&quot" in content \
+                    or re.search(r'<[^<>]+agent=[^>]+draw.io', content):
+                is_drawio_file = True
+                content = re.sub(r'width="(.*?)px" height="(.*?)px"'
+                                 , r'viewBox="0 0 \1 \2"', content)
+                content = re.sub(r'><', '>\n<', content)
 
-        processed_svg = ""
-        a_tag = False
-        svg_tag_level = 0
-        svg_tag = False
-        in_foreign_obj = False
-        skip_line = False
-        a_g_stack = []
-        curr_tag = ""
-
-        svg_lines = content.splitlines()
-        i = 0
-        while i < len(svg_lines):
-            line = svg_lines[i]
-            if re.match(r'^\s*<svg', line):
-                svg_tag = True
-                svg_tag_level += 1
-                if svg_tag_level == 1:
-                    line = re.sub(
-                        r'<svg',
-                        r'<svg id="svg" width="100%" preserveAspectRatio="xMinYMin slice"'
-                        , line.rstrip()
-                    )
-            if svg_tag and svg_tag_level == 1:
-                line = re.sub(r'id="(?!svg)"', r'', line.rstrip())
-                line = re.sub(r'width="(?!%100)"', r'', line.rstrip())
-                line = re.sub(r'height=".*?"', r'', line.rstrip())
-                line = re.sub(
-                    r'preserveAspectRatio="(?!xMinYMin slice)"'
-                    , r'', line.rstrip())  # plantuml
-                line = re.sub(r'style=".*?"', r'', line.rstrip())  # plantuml
-            if re.match(r'^\s*<g', line):
-                a_g_stack.append("g")
-            if re.match(r'^\s*<a', line):
-                a_tag = True
-                if atag_2_gtag(svg_lines, i):
-                    a_g_stack.append("g")
-                    line = re.sub(r'<a', r'<g', line.rstrip())
-                else:
-                    a_g_stack.append("a")
-            if a_tag:
-                link = re.search('xlink:href="(.*?)"', line)
-                if link:
-                    link_str_old = link.group(1)
-                    link_str_old_no_ext = os.path.splitext(link_str_old)[0]
-                    mod = re.search('mod:(.*)', link_str_old_no_ext)
-                    lit = re.search('lit:(.*)', link_str_old)
-                    if mod:
-                        link_str_new = guess_module(gm, mod.group(1), link_str_old)
-                        line = line.replace(link_str_old, link_str_new)
-                    elif lit:
-                        link_str_new = lit.group(1)
-                        line = line.replace(link_str_old, link_str_new)
-                    else:
-                        link_str_new = link_str_old.split("\\")[-1]
-                        link_str_new = link_str_new.split("/")[-1]
-                        gm.push_link(link_str_new)
-                        line = line.replace(link_str_old, link_str_new)
-                        line = re.sub(r'id=".*"', r'', line.rstrip())
-                        line = re.sub(r'xlink:href="(.*?)"', r'class="wrapper" id="\1"', line.rstrip())
-                        line = re.sub(r'xlink:actuate="onRequest"', r'', line.rstrip())  # plantuml
-                        line = re.sub(r'xlink:show="new"', r'', line.rstrip())  # plantuml
-                        line = re.sub(r'xlink:type="simple"', r'', line.rstrip())  # plantuml
-            if re.match(r'.*>\s*$', line):
-                svg_tag = False
-                if a_tag:
-                    a_tag = False
-            if re.match(r'.*</(a|g)>.*$', line):
-                if len(a_g_stack) > 0:
-                    curr_tag = a_g_stack.pop()
-                if curr_tag == "g":
-                    line = re.sub(r'</a', r'</g', line.rstrip())
-                curr_tag = ""
-            if not is_drawio_file:
-                if re.match(r'^\s*<foreignObject', line):
-                    in_foreign_obj = True
-                if re.match(r'^\s*</foreignObject>', line):
-                    in_foreign_obj = False
-                    line = ""
-            if in_foreign_obj and not is_drawio_file:  # add here other conditions to skip line
-                skip_line = True
-            if not skip_line:
-                processed_svg += (line.rstrip() + "\n")  # appends
+            processed_svg = ""
+            a_tag = False
+            svg_tag_level = 0
+            svg_tag = False
+            in_foreign_obj = False
             skip_line = False
+            a_g_stack = []
+            curr_tag = ""
 
-            # increase loop index
-            i += 1
+            svg_lines = content.splitlines()
+            i = 0
+            while i < len(svg_lines):
+                line = svg_lines[i]
+                if re.match(r'^\s*<svg', line):
+                    svg_tag = True
+                    svg_tag_level += 1
+                    if svg_tag_level == 1:
+                        line = re.sub(
+                            r'<svg',
+                            r'<svg id="svg" width="100%" preserveAspectRatio="xMinYMin slice"'
+                            , line.rstrip()
+                        )
+                if svg_tag and svg_tag_level == 1:
+                    line = re.sub(r'id="(?!svg)"', r'', line.rstrip())
+                    line = re.sub(r'width="(?!%100)"', r'', line.rstrip())
+                    line = re.sub(r'height=".*?"', r'', line.rstrip())
+                    line = re.sub(
+                        r'preserveAspectRatio="(?!xMinYMin slice)"'
+                        , r'', line.rstrip())  # plantuml
+                    line = re.sub(r'style=".*?"', r'', line.rstrip())  # plantuml
+                if re.match(r'^\s*<g', line):
+                    a_g_stack.append("g")
+                if re.match(r'^\s*<a', line):
+                    a_tag = True
+                    if atag_2_gtag(svg_lines, i):
+                        a_g_stack.append("g")
+                        line = re.sub(r'<a', r'<g', line.rstrip())
+                    else:
+                        a_g_stack.append("a")
+                if a_tag:
+                    link = re.search('xlink:href="(.*?)"', line)
+                    if link:
+                        link_str_old = link.group(1)
+                        link_str_old_no_ext = os.path.splitext(link_str_old)[0]
+                        mod = re.search('mod:(.*)', link_str_old_no_ext)
+                        lit = re.search('lit:(.*)', link_str_old)
+                        if mod:
+                            link_str_new = guess_module(gm, mod.group(1), link_str_old)
+                            line = line.replace(link_str_old, link_str_new)
+                        elif lit:
+                            link_str_new = lit.group(1)
+                            line = line.replace(link_str_old, link_str_new)
+                        else:
+                            link_str_new = link_str_old.split("\\")[-1]
+                            link_str_new = link_str_new.split("/")[-1]
+                            gm.push_link(link_str_new)
+                            line = line.replace(link_str_old, link_str_new)
+                            line = re.sub(r'id=".*"', r'', line.rstrip())
+                            line = re.sub(r'xlink:href="(.*?)"', r'class="wrapper" id="\1"', line.rstrip())
+                            line = re.sub(r'xlink:actuate="onRequest"', r'', line.rstrip())  # plantuml
+                            line = re.sub(r'xlink:show="new"', r'', line.rstrip())  # plantuml
+                            line = re.sub(r'xlink:type="simple"', r'', line.rstrip())  # plantuml
+                if re.match(r'.*>\s*$', line):
+                    svg_tag = False
+                    if a_tag:
+                        a_tag = False
+                if re.match(r'.*</(a|g)>.*$', line):
+                    if len(a_g_stack) > 0:
+                        curr_tag = a_g_stack.pop()
+                    if curr_tag == "g":
+                        line = re.sub(r'</a', r'</g', line.rstrip())
+                    curr_tag = ""
+                if not is_drawio_file:
+                    if re.match(r'^\s*<foreignObject', line):
+                        in_foreign_obj = True
+                    if re.match(r'^\s*</foreignObject>', line):
+                        in_foreign_obj = False
+                        line = ""
+                if in_foreign_obj and not is_drawio_file:  # add here other conditions to skip line
+                    skip_line = True
+                if not skip_line:
+                    processed_svg += (line.rstrip() + "\n")  # appends
+                skip_line = False
+
+                # increase loop index
+                i += 1
+    except Exception as e:
+        logger.debug(str(e))
+        raise e
     logger.info('         ...ok' + '\r\n')
     return processed_svg
 
@@ -346,21 +350,25 @@ def build_html(gm, processed_svg, file_script, xls_to_script):
         viewer_init_content = ""
 
     logger.info('         Building HTML file...' + '\r\n')
-    filled_template = str(
-        blank_template.replace("%webTitle%", gm.title)
-            .replace("%params_csv%", gm.out_html_name_no_ext
-                     + "_parameters.csv")
-            .replace("%svg%", processed_svg)
-            .replace("%templates%", file_script)
-            .replace("%menu%", gm.menu_tags))\
-        .replace("%alert%", gm.invalid_param_found_alert)\
-        .replace("%viewer_init_content%", viewer_init_content)\
-        .replace("%xls%", xls_to_script)\
-        .replace("%menuwidth%", gm.get_menu_width())\
-        .replace("%changes_tab%", gm.changes_tab) \
-        .replace("%changes_file%", gm.changes_fname)
-    text_file = open(gm.out_html_path, "w")
-    text_file.write(filled_template)
-    text_file.close()
+    try:
+        filled_template = str(
+            blank_template.replace("%webTitle%", gm.title)
+                .replace("%params_csv%", gm.out_html_name_no_ext
+                         + "_parameters.csv")
+                .replace("%svg%", processed_svg)
+                .replace("%templates%", file_script)
+                .replace("%menu%", gm.menu_tags))\
+            .replace("%alert%", gm.invalid_param_found_alert)\
+            .replace("%viewer_init_content%", viewer_init_content)\
+            .replace("%xls%", xls_to_script)\
+            .replace("%menuwidth%", gm.get_menu_width())\
+            .replace("%changes_tab%", gm.changes_tab) \
+            .replace("%changes_file%", gm.changes_fname)
+        text_file = open(gm.out_html_path, "w")
+        text_file.write(filled_template)
+        text_file.close()
+    except Exception as e:
+        logger.debug(str(e))
+        raise e
     logger.info('         ...ok' + '\r\n')
     return
